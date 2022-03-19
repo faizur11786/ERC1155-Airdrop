@@ -2,53 +2,67 @@
 
 pragma solidity ^0.8.0;
 
-contract MockToken {
-    //Variables
-    string public name;
-    string public symbol;
-    uint256 public decimals = 18;
-    uint256 public totalSupply;
-    mapping(address => uint256) public balanceOf;
-    //Mapping for the exchange - This will contain adrreses for deployer/approver and the address of exhange 
-    mapping(address => mapping(address => uint256)) public allowance;
-    //Events
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
+import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
-    constructor(string memory _name, string memory _symbol){
-        name = _name;
-        symbol = _symbol;
-        totalSupply = 100000000000000000 * (10 ** decimals);
-        balanceOf[msg.sender] = totalSupply;
+/**
+ * @title MarketToken contract
+ * @dev Extends ERC1155 Token Standards
+ */
+contract MarketToken is ERC1155Supply, Ownable {
+    using SafeMath for uint256;
+    using Counters for Counters.Counter;
+
+    Counters.Counter public tokenIdCounter;
+
+    mapping(uint => bool) public saleIsActive;
+
+    bytes4 private constant INTERFACE_ID_ERC2981 = 0x2a55205a;
+    // Tokens metadata hash in bytes
+    mapping( uint => bytes ) internal _tokenUri;
+    // base uri for JSON api host
+    string public _uri;
+
+    event TokenMint(address indexed operator, address indexed from, address indexed to, uint256 id, uint256 value, bytes data);
+
+    constructor(string memory baseURI) ERC1155(baseURI) Ownable() {
+        _uri = baseURI;
     }
 
-    function transfer(address _to, uint256 _value)public returns(bool success){
-        require(balanceOf[msg.sender] >= _value);
-        _transfer(msg.sender, _to, _value);
-        return true;
+    /**
+     * Mints Bored Apes
+     */
+    function mint(uint256 numberOfTokens, bytes memory metaDataURI) public onlyOwner returns (uint) {
+        uint256 _tokenId = tokenIdCounter.current();
+        tokenIdCounter.increment();
+        _tokenUri[_tokenId] = metaDataURI;
+        _mint(msg.sender, _tokenId, numberOfTokens, metaDataURI);
+        emit TokenMint(msg.sender, address(0), msg.sender, _tokenId, numberOfTokens, metaDataURI);
+        return _tokenId;
     }
 
-    //Function to approve allowance for a particular spendor
-    function approve(address _spender, uint256 _value) public returns (bool success){
-        require(_spender != address(0));
-        allowance[msg.sender][_spender] = _value;
-        emit Approval(msg.sender, _spender, _value);
-        return true;
+    function withdraw() public onlyOwner {
+        uint256 balance = address(this).balance;
+        payable(msg.sender).transfer(balance);
     }
 
-    function _transfer(address _from, address _to, uint256 _value) internal{
-        require(_to != address(0));
-        balanceOf[_from] = balanceOf[_from] - _value;
-        balanceOf[_to] = balanceOf[_to] + _value;
-        emit Transfer(_from, _to, _value);
+    function setURI(string memory newuri) public onlyOwner {
+        _uri = newuri;
     }
 
-    //Function to authorize the exhange for trades
-    function transferFrom(address _from, address _to, uint256 _value) public returns (bool success){
-    require(_value <= balanceOf[_from]);
-    require(_value <= allowance[_from][msg.sender]);
-    allowance[_from][msg.sender] -= _value;
-    _transfer(_from,_to, _value);
-    return true;
+    function uri(uint256 tokenId) override public view returns (string memory) {
+        return string(_tokenUri[tokenId]);
     }
-} 
+
+
+
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC1155) returns (bool){
+        if (interfaceId == INTERFACE_ID_ERC2981){
+            return true;
+        }
+        return super.supportsInterface(interfaceId);
+    }
+}

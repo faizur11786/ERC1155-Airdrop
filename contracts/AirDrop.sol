@@ -1,45 +1,40 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
 contract AirDrop is Ownable, ReentrancyGuard {
-    using SafeERC20 for IERC20;
     using Address for address;
 
     struct Drop {
-        uint256 eligible;
-        uint256 airDroped;
-        uint256 eligibleEth;
-        uint256 airDropedEth;
+        uint256 eligibleNFT;
+        uint256 airDropedNFT;
     }
+
     mapping(address => Drop) public airDrops;
     address[] public airDropAccounts;
-    address public erc20;
+    address public erc1155;
     address public payer;
 
-    constructor(address _erc20, address _payer) Ownable() ReentrancyGuard() {
-        erc20 = _erc20;
+    constructor(address _erc1155, address _payer) Ownable() ReentrancyGuard() {
+        erc1155 = _erc1155;
         payer = _payer;
     }
 
     function addAirDrops(
         address[] memory _candidates,
-        uint256[] memory _amount,
-        uint256[] memory _amountEth
+        uint256[] memory _NFTId
     ) external onlyOwner {
         require(
-            _candidates.length == _amount.length &&
-                _candidates.length == _amountEth.length,
+            _candidates.length == _NFTId.length,
             "Array length mismatch"
         );
         for (uint256 i; i < _candidates.length; i++) {
-            airDrops[_candidates[i]].eligible += _amount[i];
-            airDrops[_candidates[i]].eligibleEth += _amountEth[i];
+            airDrops[_candidates[i]].eligibleNFT += _NFTId[i];
             if( indexOf(airDropAccounts, _candidates[i]) < 0 ){
                 airDropAccounts.push(_candidates[i]);
             }
@@ -72,51 +67,12 @@ contract AirDrop is Ownable, ReentrancyGuard {
         }
     }
 
-    function airdropsLeftERC20(uint256 n)
-        public
-        view
-        returns (address[] memory)
-    {
-        address[] memory accLeft = new address[](n);
-        uint256 j;
-        for (uint256 i; i < airDropAccounts.length && j < n; i++) {
-            if (airDrops[airDropAccounts[i]].eligible > 0) {
-                accLeft[j] = airDropAccounts[i];
-                j++;
-            }
-        }
-        return accLeft;
-    }
-
-    function airdropsLeftEth(uint256 n) public view returns (address[] memory) {
-        address[] memory accLeft = new address[](n);
-        uint256 j;
-        for (uint256 i; i < airDropAccounts.length && j < n; i++) {
-            if (airDrops[airDropAccounts[i]].eligibleEth > 0) {
-                accLeft[j] = airDropAccounts[i];
-                j++;
-            }
-        }
-        return accLeft;
-    }
 
     function _airDropToAccount(address _account) internal {
-        uint256 tokensToSend = airDrops[_account].eligible;
-        if (tokensToSend > 0) {
-            airDrops[_account].eligible -= tokensToSend;
-            airDrops[_account].airDroped += tokensToSend;
-            IERC20(erc20).transferFrom(payer, _account, tokensToSend);
-        }
-        uint256 ethToSend = airDrops[_account].eligibleEth;
-        require(
-            ethToSend <= address(this).balance,
-            "Not enough eth in contract"
-        );
-        if (ethToSend > 0) {
-            airDrops[_account].eligibleEth -= ethToSend;
-            airDrops[_account].airDropedEth += ethToSend;
-            payable(_account).transfer(ethToSend);
-        }
+        uint256 tokenId = airDrops[_account].eligibleNFT;
+        airDrops[_account].eligibleNFT -= tokenId;
+        airDrops[_account].airDropedNFT += tokenId;
+        IERC1155(erc1155).safeTransferFrom(payer, _account, tokenId, 1,"");
     }
 
     function indexOf(address[] memory arr, address searchFor)
@@ -132,9 +88,9 @@ contract AirDrop is Ownable, ReentrancyGuard {
         return -1; // not found
     }
 
-    function withdraw(address _token) public onlyOwner nonReentrant {
-        IERC20 acceptedToken = IERC20(_token);
-        acceptedToken.transfer(owner(), acceptedToken.balanceOf(address(this)));
+    function withdraw(address _token, uint256 tokenId) public onlyOwner nonReentrant {
+        IERC1155 acceptedToken = IERC1155(_token);
+        acceptedToken.safeTransferFrom(address(this), owner(), tokenId, 1, "");
     }
 
     function withdraw() public onlyOwner nonReentrant {
