@@ -1,5 +1,4 @@
 const axios = require("axios");
-
 module.exports = class GasPriceEstimator {
   constructor(
     network,
