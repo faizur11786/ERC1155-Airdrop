@@ -57,8 +57,6 @@ contract MarketToken is ERC1155Supply, Ownable {
         return string(_tokenUri[tokenId]);
     }
 
-
-
     function supportsInterface(bytes4 interfaceId) public view virtual override(ERC1155) returns (bool){
         if (interfaceId == INTERFACE_ID_ERC2981){
             return true;
