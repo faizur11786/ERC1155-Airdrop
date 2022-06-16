@@ -4,6 +4,7 @@ This project demonstrates a way to airdrop ERC20 Tokens
 
 Try running some of the following tasks:
 
+
 ```shell
 npx hardhat accounts
 npx hardhat compile
